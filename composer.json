@@ -1,0 +1,25 @@
+{
+    "name": "minhd/oai-pmh",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Minh Duc Nguyen",
+            "email": "dekarvn@gmail.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "MinhD\\OAIPMH\\": "src/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit"
+    },
+    "require": {
+        "psr/http-message": "^1.0",
+        "guzzlehttp/psr7": "^1.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^5.7"
+    }
+}

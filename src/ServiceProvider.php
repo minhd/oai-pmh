@@ -19,6 +19,7 @@ class ServiceProvider
 
     private $options = [];
     private $repository;
+    private $limit = 100;
 
     /**
      * OAIServiceProvider constructor.
@@ -149,6 +150,12 @@ class ServiceProvider
         return $response;
     }
 
+    private function addResumptionToken($response, $token)
+    {
+        $response->addElement('resumptionToken', $token);
+        return $response;
+    }
+
     private function identify()
     {
         $response = $this->getCommonResponse();
@@ -183,15 +190,30 @@ class ServiceProvider
     {
         $response = $this->getCommonResponse();
 
-        // TODO resumptionToken
-        $sets = $this->repository->listSets();
+        $offset = 0;
+
+        if (array_key_exists('resumptionToken', $this->options)) {
+            $data = $this->decodeToken($this->options['resumptionToken']);
+            $offset = $data['offset'];
+        }
+
+        $sets = $this->repository->listSets($this->limit, $offset);
 
         $element = $response->addElement('ListSets');
-        foreach ($sets as $key => $value) {
+        foreach ($sets['sets'] as $key => $value) {
             $format = $element->addChild('set');
             foreach ($value as $k => $v) {
                 $format->addChild($k, $v);
             }
+        }
+
+        // check if there should be more
+        // assign resumption token if true
+        if (($sets['offset'] + $sets['limit']) < $sets['total']) {
+            $resumptionToken = $this->encodeToken(
+                [ 'offset' => $sets['offset'] + $sets['limit'] ]
+            );
+            $response = $this->addResumptionToken($response, $resumptionToken);
         }
 
         return $response;
@@ -210,6 +232,16 @@ class ServiceProvider
     private function listRecords()
     {
         return new Response();
+    }
+
+    private function encodeToken($data)
+    {
+        return base64_encode(json_encode($data, true));
+    }
+
+    private function decodeToken($data)
+    {
+        return json_decode(base64_decode($data), true);
     }
 
 }

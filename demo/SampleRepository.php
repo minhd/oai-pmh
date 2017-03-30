@@ -4,6 +4,8 @@ use MinhD\OAIPMH\Interfaces\OAIRepository;
 
 class SampleRepository implements OAIRepository {
 
+    protected $payloadLimit = 100;
+
     private $identity = [
         'repositoryName' => 'Sample Name',
         'baseURL' => 'http://localhost.com',
@@ -15,14 +17,6 @@ class SampleRepository implements OAIRepository {
     ];
 
     public $dateFormat = "Y-m-d\\Th:m:s\\Z";
-
-    private $sets = [
-        [ 'setSpec' => 'testSet1Spec', 'setName' => 'testSet1' ],
-        [ 'setSpec' => 'testSet2Spec', 'setName' => 'testSet2' ],
-        [ 'setSpec' => 'testSet3Spec', 'setName' => 'testSet3' ],
-        [ 'setSpec' => 'testSet4Spec', 'setName' => 'testSet4' ],
-        [ 'setSpec' => 'testSet5Spec', 'setName' => 'testSet5' ],
-    ];
 
     private $metadataFormats = [
         [
@@ -53,19 +47,23 @@ class SampleRepository implements OAIRepository {
         return $this->identity;
     }
 
-    public function listSets()
+    public function listSets($limit = 0, $offset = 0)
     {
-        return $this->sets;
-    }
+        $setCount = 250;
 
-    /**
-     * @param array $sets
-     * @return SampleRepository
-     */
-    public function setSets($sets)
-    {
-        $this->sets = $sets;
-        return $this;
+        $sets = [];
+        for ($i = 1; $i <= $setCount; $i++) {
+            $sets[] = [
+                'setSpec' => "testSet{$i}Spec", 'setName' => "testSet{$i}"
+            ];
+        }
+
+        $total = count($sets);
+
+        // get the limit and offset
+        $sets = array_slice($sets, $offset, $limit);
+
+        return compact('total', 'sets', 'limit', 'offset');
     }
 
     /**

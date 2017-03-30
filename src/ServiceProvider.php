@@ -54,9 +54,33 @@ class ServiceProvider
         return $this;
     }
 
+    /**
+     * Sanitize the options provided
+     * Remove all unneeded request param
+     */
     private function sanitizeOptions()
     {
-        // TODO
+        // get the verb
+        $verb = null;
+        if (array_key_exists('verb', $this->options)) {
+            $verb = $this->options['verb'];
+        }
+
+        // continue if verb is not found
+        // probably throw exception here
+        $validVerbs = array_keys(self::$validVerbs);
+        if (!in_array($verb, $validVerbs)) {
+            return;
+        }
+
+        // unset all other values other than the needed
+        $valid = self::$validVerbs[$verb];
+        foreach ($this->options as $key => $value) {
+            if ($key == "verb" || in_array($key, $valid)) {
+                continue;
+            }
+            unset($this->options[$key]);
+        }
     }
 
     /**

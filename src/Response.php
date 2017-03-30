@@ -7,7 +7,7 @@ use \Exception as Exception;
 class Response
 {
     private $status = 200;
-    private $headers = ['Content-Type' => 'text/xml; charset=utf8'];
+    private $headers = ['Content-Type' => 'application/xml'];
     private $content = null;
     private $pretty = true;
 

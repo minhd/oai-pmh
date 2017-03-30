@@ -3,7 +3,6 @@
 
 namespace MinhD\OAIPMH;
 
-
 use GuzzleHttp\Psr7\Response as Psr7Response;
 
 class ResponseTest extends \PHPUnit_Framework_TestCase

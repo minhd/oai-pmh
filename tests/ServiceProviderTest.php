@@ -1,15 +1,14 @@
 <?php
 
+namespace MinhD\OAIPMH;
 
-use MinhD\OAIPMH\OAIServiceProvider;
-
-class OAIServiceProviderTest extends PHPUnit_Framework_TestCase
+class ServiceProviderTest extends \PHPUnit_Framework_TestCase
 {
     /** @test **/
     public function it_should_construct_a_provider()
     {
         $provider = $this->getTestProvider();
-        $this->assertInstanceOf(OAIServiceProvider::class, $provider);
+        $this->assertInstanceOf(ServiceProvider::class, $provider);
     }
 
     /** @test **/
@@ -27,12 +26,12 @@ class OAIServiceProviderTest extends PHPUnit_Framework_TestCase
     public function it_should_identify()
     {
         $provider = $this->getTestProvider();
-        $response = $provider->setOption('verb', 'Identify')->get()->getResponse()->getBody()->getContents();
-        dd($response);
+        $response = $provider->setOption('verb', 'Identify')->get();
+        $this->assertInstanceOf(Response::class, $response);
     }
 
     private function getTestProvider()
     {
-        return new OAIServiceProvider();
+        return new ServiceProvider();
     }
 }

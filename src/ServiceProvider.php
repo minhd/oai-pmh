@@ -3,7 +3,7 @@
 
 namespace MinhD\OAIPMH;
 
-class OAIServiceProvider
+class ServiceProvider
 {
     protected static $validVerbs = [
         "Identify" => [],
@@ -84,32 +84,32 @@ class OAIServiceProvider
 
     private function identify()
     {
-        return new OAIResponse();
+        return new Response();
     }
 
     private function listMetadataFormats()
     {
-        return new OAIResponse();
+        return new Response();
     }
 
     private function listSets()
     {
-        return new OAIResponse();
+        return new Response();
     }
 
     private function listIdentifiers()
     {
-        return new OAIResponse();
+        return new Response();
     }
 
     private function getRecord()
     {
-        return new OAIResponse();
+        return new Response();
     }
 
     private function listRecords()
     {
-        return new OAIResponse();
+        return new Response();
     }
 
 }

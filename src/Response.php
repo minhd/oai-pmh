@@ -16,27 +16,27 @@ class Response
      */
     public function __construct()
     {
-        $this->content = new \SimpleXMLElement('<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" 
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"/>');
+        $this->content = new \DOMDocument('1.0', 'UTF-8');
+        $this->content->formatOutput = true;
+        $documentElement = $this->content->createElementNS('http://www.openarchives.org/OAI/2.0/', "OAI-PMH");
+        $documentElement->setAttribute('xmlns', 'http://www.openarchives.org/OAI/2.0/');
+        $documentElement->setAttributeNS(
+            "http://www.w3.org/2001/XMLSchema-instance",
+            'xsi:schemaLocation',
+            'http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd'
+        );
+        $this->content->appendChild($documentElement);
     }
 
     /**
      * @param $name
      * @param string $value
-     * @return \SimpleXMLElement
+     * @return \DOMElement
      */
-    public function addElement($name, $value = null, $attributes = [])
+    public function addElement($name, $value = null)
     {
-        $element = $this->content->addChild($name, $value);
-        if (count($attributes) == 0) {
-            return $element;
-        }
-
-        foreach ($attributes as $key => $value) {
-            $element->addAttribute($key, $value);
-        }
-
+        $element = $this->createElement($name, $value);
+        $this->content->documentElement->appendChild($element);
         return $element;
     }
 
@@ -69,5 +69,10 @@ class Response
             $this->headers,
             $xml
         );
+    }
+
+    public function getContent()
+    {
+        return $this->content;
     }
 }

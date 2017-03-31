@@ -4,6 +4,9 @@
 namespace MinhD\OAIPMH;
 
 use Carbon\Carbon;
+use DOMDocument;
+use MinhD\OAIPMH\Exception\BadArgumentException;
+use MinhD\OAIPMH\Exception\BadVerbException;
 use MinhD\OAIPMH\Interfaces\OAIRepository;
 
 class ServiceProvider
@@ -116,7 +119,7 @@ class ServiceProvider
                     return $this->getRecord();
                     break;
                 default:
-                    throw new OAIException("badVerb", "Bad verb");
+                    throw new BadVerbException("Bad Verb");
                     break;
             }
         } catch (OAIException $e) {
@@ -133,7 +136,7 @@ class ServiceProvider
     {
         $response = $this->getCommonResponse();
         $error = $response->addElement('error', $exception->getMessage());
-        $error->addAttribute('code', $exception->getOaiErrorCode());
+        $error->setAttribute('code', $exception->getErrorName());
         return $response;
     }
 
@@ -150,7 +153,7 @@ class ServiceProvider
         return $response;
     }
 
-    private function addResumptionToken($response, $token)
+    private function addResumptionToken(Response $response, $token)
     {
         $response->addElement('resumptionToken', $token);
         return $response;
@@ -163,7 +166,8 @@ class ServiceProvider
 
         $identityElement = $response->addElement('Identify');
         foreach ($identity as $key => $value) {
-            $identityElement->addChild($key, $value);
+            $node = $response->createElement($key, $value);
+            $identityElement->appendChild($node);
         }
         return $response;
     }
@@ -177,10 +181,13 @@ class ServiceProvider
 
         $element = $response->addElement("ListMetadataFormats");
         foreach ($metadataFormats as $key => $value) {
-            $format = $element->addChild('metadataFormat');
+            $node = $response->createElement('metadataFormat');
             foreach ($value as $k => $v) {
-                $format->addChild($k, $v);
+                $node->appendChild(
+                    $response->createElement($k, $v)
+                );
             }
+            $element->appendChild($node);
         }
 
         return $response;
@@ -200,11 +207,14 @@ class ServiceProvider
         $sets = $this->repository->listSets($this->limit, $offset);
 
         $element = $response->addElement('ListSets');
-        foreach ($sets['sets'] as $key => $value) {
-            $format = $element->addChild('set');
-            foreach ($value as $k => $v) {
-                $format->addChild($k, $v);
+        foreach ($sets['sets'] as $set) {
+            $node = $response->createElement('set');
+            foreach ($set->toArray() as $k => $v) {
+                $node->appendChild(
+                    $response->createElement($k, $v)
+                );
             }
+            $element->appendChild($node);
         }
 
         // check if there should be more
@@ -221,7 +231,13 @@ class ServiceProvider
 
     private function listIdentifiers()
     {
-        return new Response();
+        $response = $this->getCommonResponse();
+
+        if (!in_array('metadataPrefix', $this->options)) {
+            throw new badArgumentException();
+        }
+
+        return $response;
     }
 
     private function getRecord()
@@ -231,7 +247,70 @@ class ServiceProvider
 
     private function listRecords()
     {
-        return new Response();
+        $response = $this->getCommonResponse();
+        $set = null;
+
+        if (!array_key_exists('metadataPrefix', $this->options)) {
+            throw new BadArgumentException("bad argument: Missing required argument 'metadataPrefix'");
+        }
+
+        $options = [
+            'limit' => $this->limit,
+            'offset' => 0,
+            'from' => null,
+            'to' => null
+        ];
+
+        if (array_key_exists('resumptionToken', $this->options)) {
+            $data = $this->decodeToken($this->options['resumptionToken']);
+            $options = $data;
+        }
+
+        $metadataPrefix = $this->options['metadataPrefix'];
+
+        $records = $this->repository->listRecords($metadataPrefix, $set, $options);
+
+        $element = $response->addElement('ListRecords');
+        foreach ($records['records'] as $record) {
+            $data = $record->toArray();
+
+            $recordNode = $element->appendChild(
+                $response->createElement('record')
+            );
+
+            $headerNode = $recordNode->appendChild($response->createElement('header'));
+            $headerNode
+                ->appendChild(
+                    $response->createElement('identifier', $data['identifier'])
+                );
+            $headerNode
+                ->appendChild(
+                    $response->createElement('datestamp', $data['datestamp'])
+                );
+            foreach ($data['specs'] as $spec) {
+                $headerNode
+                    ->appendChild(
+                        $response->createElement('setSpec', $spec->getSetSpec())
+                    );
+            }
+
+            $metadataNode = $recordNode->appendChild($response->createElement('metadata'));
+
+            $fragment = $response->getContent()->createDocumentFragment();
+            $fragment->appendXML($data['metadata']);
+            $metadataNode->appendChild($fragment);
+
+            $element->appendChild($recordNode);
+        }
+
+        // resumptionToken
+        if (($records['offset'] + $records['limit']) < $records['total']) {
+            $options['offset'] = $records['offset'] + $records['limit'];
+            $resumptionToken = $this->encodeToken($options);
+            $response = $this->addResumptionToken($response, $resumptionToken);
+        }
+
+        return $response;
     }
 
     private function encodeToken($data)

@@ -1,6 +1,9 @@
 <?php
 
+use Carbon\Carbon;
 use MinhD\OAIPMH\Interfaces\OAIRepository;
+use MinhD\OAIPMH\Record;
+use MinhD\OAIPMH\Set;
 
 class SampleRepository implements OAIRepository {
 
@@ -53,9 +56,7 @@ class SampleRepository implements OAIRepository {
 
         $sets = [];
         for ($i = 1; $i <= $setCount; $i++) {
-            $sets[] = [
-                'setSpec' => "testSet{$i}Spec", 'setName' => "testSet{$i}"
-            ];
+            $sets[] = new Set("testSet{$i}Spec", "testSet{$i}");
         }
 
         $total = count($sets);
@@ -82,5 +83,65 @@ class SampleRepository implements OAIRepository {
     {
         // TODO identifier
         return $this->metadataFormats;
+    }
+
+    public function listIdentifiers($metadataPrefix = null)
+    {
+        return [
+
+        ];
+    }
+
+    public function listSetsByToken($token)
+    {
+        // TODO: Implement listSetsByToken() method.
+    }
+
+    public function getRecord($metadataFormat, $identifier)
+    {
+        // TODO: Implement getRecord() method.
+    }
+
+    public function listRecords(
+        $metadataFormat = null,
+        $set = null,
+        $options = []
+    ) {
+
+        $records = [];
+
+        $count = 250;
+        for ($i=1;$i<=$count;$i++) {
+            $record = new Record("oai:id:$i", Carbon::now()->format($this->getDateFormat()));
+            $record
+                ->setMetadata("<rifcs for='".$i."'>$i</rifcs>");
+
+            $sets = ['1', '2', '3'];
+            foreach ($sets as $set) {
+                $record->addSet(new Set($set, "Name of $set"));
+            }
+
+            $records[] = $record;
+        }
+
+        $total = count($records);
+
+        // limit & offset
+        $limit = $options['limit'];
+        $offset = $options['offset'];
+
+        $records = array_slice($records, $offset, $limit);
+
+        return [
+            'total' => $total,
+            'records' => $records,
+            'limit' => $limit,
+            'offset' => 0
+        ];
+    }
+
+    public function listRecordsByToken($token)
+    {
+        // TODO: Implement listRecordsByToken() method.
     }
 }

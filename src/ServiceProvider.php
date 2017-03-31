@@ -153,9 +153,13 @@ class ServiceProvider
         return $response;
     }
 
-    private function addResumptionToken(Response $response, $token)
+    private function addResumptionToken(Response $response, $token, $offset = 0, $total = 0)
     {
-        $response->addElement('resumptionToken', $token);
+        $node = $response->addElement('resumptionToken', $token);
+        if ($total > 0) {
+            $node->setAttribute('cursor', $offset);
+            $node->setAttribute('completeListSize', $total);
+        }
         return $response;
     }
 
@@ -223,7 +227,7 @@ class ServiceProvider
             $resumptionToken = $this->encodeToken(
                 [ 'offset' => $sets['offset'] + $sets['limit'] ]
             );
-            $response = $this->addResumptionToken($response, $resumptionToken);
+            $response = $this->addResumptionToken($response, $resumptionToken, $sets['offset'], $sets['total']);
         }
 
         return $response;
@@ -312,7 +316,7 @@ class ServiceProvider
         if (($records['offset'] + $records['limit']) < $records['total']) {
             $options['offset'] = $records['offset'] + $records['limit'];
             $resumptionToken = $this->encodeToken($options);
-            $response = $this->addResumptionToken($response, $resumptionToken);
+            $response = $this->addResumptionToken($response, $resumptionToken, $records['offset'], $records['total']);
         }
 
         return $response;

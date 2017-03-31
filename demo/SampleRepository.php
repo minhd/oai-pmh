@@ -136,7 +136,7 @@ class SampleRepository implements OAIRepository {
             'total' => $total,
             'records' => $records,
             'limit' => $limit,
-            'offset' => 0
+            'offset' => $offset
         ];
     }
 

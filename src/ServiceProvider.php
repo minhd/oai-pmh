@@ -256,10 +256,15 @@ class ServiceProvider
 
         $options = [
             'limit' => $this->limit,
+            'set' => null,
             'offset' => 0,
             'from' => null,
             'to' => null
         ];
+
+        if (array_key_exists('set', $this->options)) {
+            $options['set'] = $this->options['set'];
+        }
 
         if (array_key_exists('resumptionToken', $this->options)) {
             $data = $this->decodeToken($this->options['resumptionToken']);

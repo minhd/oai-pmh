@@ -237,8 +237,57 @@ class ServiceProvider
     {
         $response = $this->getCommonResponse();
 
-        if (!in_array('metadataPrefix', $this->options)) {
-            throw new badArgumentException();
+        $options = [
+            'limit' => $this->limit,
+            'set' => null,
+            'offset' => 0,
+            'from' => null,
+            'to' => null
+        ];
+
+        if (array_key_exists('set', $this->options)) {
+            $options['set'] = $this->options['set'];
+        }
+
+        if (array_key_exists('resumptionToken', $this->options)) {
+            $data = $this->decodeToken($this->options['resumptionToken']);
+            $options = $data;
+        }
+
+        $metadataPrefix = $this->options['metadataPrefix'];
+
+        $records = $this->repository->listIdentifiers($metadataPrefix, $options);
+
+        $element = $response->addElement('ListRecords');
+        foreach($records['records'] as $record) {
+            $data = $record->toArray();
+
+            $recordNode = $element->appendChild(
+                $response->createElement('record')
+            );
+
+            $headerNode = $recordNode->appendChild($response->createElement('header'));
+            $headerNode
+                ->appendChild(
+                    $response->createElement('identifier', $data['identifier'])
+                );
+            $headerNode
+                ->appendChild(
+                    $response->createElement('datestamp', $data['datestamp'])
+                );
+            foreach ($data['specs'] as $spec) {
+                $headerNode
+                    ->appendChild(
+                        $response->createElement('setSpec', $spec->getSetSpec())
+                    );
+            }
+        }
+
+        // resumptionToken
+        if (($records['offset'] + $records['limit']) < $records['total']) {
+            $options['offset'] = $records['offset'] + $records['limit'];
+            $resumptionToken = $this->encodeToken($options);
+            $response = $this->addResumptionToken($response, $resumptionToken, $records['offset'], $records['total']);
         }
 
         return $response;
@@ -246,6 +295,12 @@ class ServiceProvider
 
     private function getRecord()
     {
+        // TODO: metadataPrefix & identifier
+
+        $response = $this->getCommonResponse();
+
+
+
         return new Response();
     }
 

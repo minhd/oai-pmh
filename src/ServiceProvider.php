@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use DOMDocument;
 use MinhD\OAIPMH\Exception\BadArgumentException;
 use MinhD\OAIPMH\Exception\BadVerbException;
+use MinhD\OAIPMH\Exception\NoRecordsMatch;
 use MinhD\OAIPMH\Interfaces\OAIRepository;
 
 class ServiceProvider
@@ -260,27 +261,10 @@ class ServiceProvider
 
         $element = $response->addElement('ListRecords');
         foreach($records['records'] as $record) {
-            $data = $record->toArray();
-
             $recordNode = $element->appendChild(
                 $response->createElement('record')
             );
-
-            $headerNode = $recordNode->appendChild($response->createElement('header'));
-            $headerNode
-                ->appendChild(
-                    $response->createElement('identifier', $data['identifier'])
-                );
-            $headerNode
-                ->appendChild(
-                    $response->createElement('datestamp', $data['datestamp'])
-                );
-            foreach ($data['specs'] as $spec) {
-                $headerNode
-                    ->appendChild(
-                        $response->createElement('setSpec', $spec->getSetSpec())
-                    );
-            }
+            $recordNode = $this->addOaiRecordResponse($recordNode, $record, $response);
         }
 
         // resumptionToken
@@ -299,9 +283,52 @@ class ServiceProvider
 
         $response = $this->getCommonResponse();
 
+        $metadataPrefix = $this->options['metadataPrefix'];
+        $identifier = $this->options['identifier'];
 
+        $record = $this->repository->getRecord($metadataPrefix, $identifier);
+        if ($record === null) {
+            throw new NoRecordsMatch("No matching records found: record not found");
+        }
 
-        return new Response();
+        $element = $response->addElement('GetRecord');
+        $element = $this->addOaiRecordResponse($element, $record, $response);
+
+        return $response;
+    }
+
+    private function addOaiRecordResponse(\DOMNode $element, $record, Response $response)
+    {
+        $data = $record->toArray();
+        $recordNode = $element->appendChild(
+            $response->createElement('record')
+        );
+
+        $headerNode = $recordNode->appendChild($response->createElement('header'));
+        $headerNode
+            ->appendChild(
+                $response->createElement('identifier', $data['identifier'])
+            );
+        $headerNode
+            ->appendChild(
+                $response->createElement('datestamp', $data['datestamp'])
+            );
+        foreach ($data['specs'] as $spec) {
+            $headerNode
+                ->appendChild(
+                    $response->createElement('setSpec', $spec->getSetSpec())
+                );
+        }
+
+        $metadataNode = $recordNode->appendChild($response->createElement('metadata'));
+
+        $fragment = $response->getContent()->createDocumentFragment();
+        $fragment->appendXML($data['metadata']);
+        $metadataNode->appendChild($fragment);
+
+        $element->appendChild($recordNode);
+
+        return $element;
     }
 
     private function listRecords()

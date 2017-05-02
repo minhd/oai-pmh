@@ -336,7 +336,7 @@ class ServiceProvider
         $response = $this->getCommonResponse();
         $set = null;
 
-        if (!array_key_exists('metadataPrefix', $this->options)) {
+        if (!array_key_exists('metadataPrefix', $this->options) && !array_key_exists('resumptionToken', $this->options)) {
             throw new BadArgumentException("bad argument: Missing required argument 'metadataPrefix'");
         }
 
@@ -357,7 +357,14 @@ class ServiceProvider
             $options = $data;
         }
 
-        $metadataPrefix = $this->options['metadataPrefix'];
+        $metadataPrefix = null;
+        if (array_key_exists("metadataPrefix", $this->options)) {
+            $metadataPrefix = $this->options['metadataPrefix'];
+        }
+
+        if (array_key_exists("metadataPrefix", $options)) {
+            $metadataPrefix = $options['metadataPrefix'];
+        }
 
         $records = $this->repository->listRecords($metadataPrefix, $set, $options);
 
@@ -395,10 +402,13 @@ class ServiceProvider
         }
 
         // resumptionToken
-        if (($records['offset'] + $records['limit']) < $records['total']) {
+        $cursor = $records['offset'] + $records['limit'];
+        if ( $cursor <= $records['total']) {
             $options['offset'] = $records['offset'] + $records['limit'];
-            $resumptionToken = $this->encodeToken($options);
-            $response = $this->addResumptionToken($response, $resumptionToken, $records['offset'], $records['total']);
+            $resumptionToken = $this->encodeToken(
+                array_merge($options, ["metadataPrefix" => $metadataPrefix])
+            );
+            $response = $this->addResumptionToken($response, $resumptionToken, $cursor, $records['total']);
         }
 
         return $response;

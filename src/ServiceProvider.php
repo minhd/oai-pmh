@@ -3,9 +3,11 @@
 
 namespace MinhD\OAIPMH;
 
+use ANDS\Commands\Script\ProcessScholix;
 use Carbon\Carbon;
 use DOMDocument;
 use MinhD\OAIPMH\Exception\BadArgumentException;
+use MinhD\OAIPMH\Exception\BadResumptionToken;
 use MinhD\OAIPMH\Exception\BadVerbException;
 use MinhD\OAIPMH\Exception\NoRecordsMatch;
 use MinhD\OAIPMH\Interfaces\OAIRepository;
@@ -24,14 +26,17 @@ class ServiceProvider
     private $options = [];
     private $repository;
     private $limit = 100;
+    private $baseUrl = null;
 
     /**
      * OAIServiceProvider constructor.
      * @param OAIRepository $repository
+     * @param null $baseUrl
      */
-    public function __construct(OAIRepository $repository)
+    public function __construct(OAIRepository $repository, $baseUrl = null)
     {
         $this->repository = $repository;
+        $this->baseUrl = $baseUrl;
     }
 
     public function setOption($key, $value)
@@ -135,21 +140,35 @@ class ServiceProvider
      */
     public function getExceptionResponse(OAIException $exception)
     {
-        $response = $this->getCommonResponse();
+        // don't include request attributs when badVerb or badArgument
+        $includeRequestAttribute = true;
+        $exceptionClass = get_class($exception);
+        if (in_array($exceptionClass, [BadVerbException::class, BadArgumentException::class])) {
+            $includeRequestAttribute = false;
+        }
+
+        $response = $this->getCommonResponse($includeRequestAttribute);
         $error = $response->addElement('error', $exception->getMessage());
         $error->setAttribute('code', $exception->getErrorName());
         return $response;
     }
 
-    private function getCommonResponse()
+    private function getCommonResponse($includeRequestAttributes = true)
     {
         $response = new Response;
 
         $format = $this->repository->getDateFormat();
         $response->addElement('responseDate', Carbon::now()->format($format));
 
-        $url = "http://$_SERVER[HTTP_HOST]";
-        $response->addElement('request', $url, $this->options);
+        $requestElement = $response->addElement('request', $this->repository->getBaseUrl());
+
+        if ($includeRequestAttributes === false) {
+            return $response;
+        }
+
+        foreach ($this->options as $key => $value) {
+            $requestElement->setAttribute($key, $value);
+        }
 
         return $response;
     }
@@ -181,8 +200,11 @@ class ServiceProvider
     {
         $response = $this->getCommonResponse();
 
-        // TODO identifier
-        $metadataFormats = $this->repository->listMetadataFormats();
+        if ($this->requestHas("identifier")) {
+            $metadataFormats = $this->repository->listMetadataFormats($this->requestValue("identifier"));
+        } else {
+            $metadataFormats = $this->repository->listMetadataFormats();
+        }
 
         $element = $response->addElement("ListMetadataFormats");
         foreach ($metadataFormats as $key => $value) {
@@ -196,6 +218,16 @@ class ServiceProvider
         }
 
         return $response;
+    }
+
+    private function requestHas($key)
+    {
+        return array_key_exists($key, $this->options);
+    }
+
+    private function requestValue($key)
+    {
+        return $this->options[$key];
     }
 
     private function listSets()
@@ -238,26 +270,15 @@ class ServiceProvider
     {
         $response = $this->getCommonResponse();
 
-        $options = [
-            'limit' => $this->limit,
-            'set' => null,
-            'offset' => 0,
-            'from' => null,
-            'to' => null
-        ];
-
-        if (array_key_exists('set', $this->options)) {
-            $options['set'] = $this->options['set'];
+        $options = $this->collectOptions();
+        if (!array_key_exists("metadataPrefix", $options)) {
+            throw new BadArgumentException("Missing required metadataPrefix argument");
         }
 
-        if (array_key_exists('resumptionToken', $this->options)) {
-            $data = $this->decodeToken($this->options['resumptionToken']);
-            $options = $data;
+        $records = $this->repository->listIdentifiers($options);
+        if (count($records['records']) == 0) {
+            throw new NoRecordsMatch();
         }
-
-        $metadataPrefix = $this->options['metadataPrefix'];
-
-        $records = $this->repository->listIdentifiers($metadataPrefix, $options);
 
         $element = $response->addElement('ListRecords');
         foreach($records['records'] as $record) {
@@ -268,10 +289,13 @@ class ServiceProvider
         }
 
         // resumptionToken
-        if (($records['offset'] + $records['limit']) < $records['total']) {
+        $cursor = $records['offset'] + $records['limit'];
+        if ( $cursor <= $records['total']) {
             $options['offset'] = $records['offset'] + $records['limit'];
-            $resumptionToken = $this->encodeToken($options);
-            $response = $this->addResumptionToken($response, $resumptionToken, $records['offset'], $records['total']);
+            $resumptionToken = $this->encodeToken(
+                array_merge($options)
+            );
+            $response = $this->addResumptionToken($response, $resumptionToken, $cursor, $records['total']);
         }
 
         return $response;
@@ -320,15 +344,40 @@ class ServiceProvider
                 );
         }
 
-        $metadataNode = $recordNode->appendChild($response->createElement('metadata'));
+        if ($data['metadata']) {
+            $metadataNode = $recordNode->appendChild($response->createElement('metadata'));
+            $fragment = $response->getContent()->createDocumentFragment();
+            $fragment->appendXML($data['metadata']);
+            $metadataNode->appendChild($fragment);
+        }
 
-        $fragment = $response->getContent()->createDocumentFragment();
-        $fragment->appendXML($data['metadata']);
-        $metadataNode->appendChild($fragment);
 
         $element->appendChild($recordNode);
 
         return $element;
+    }
+
+    private function collectOptions()
+    {
+        $options = array_merge([
+            'limit' => $this->limit,
+            'set' => null,
+            'offset' => 0,
+            'from' => null,
+            'to' => null
+        ], $this->options);
+
+
+        if ($this->requestHas("resumptionToken")) {
+            $data = $this->decodeToken($this->requestValue('resumptionToken'));
+            if ($data === null) {
+                // corrupted resumptionToken
+                throw new BadResumptionToken();
+            }
+            $options = $data;
+        }
+
+        return $options;
     }
 
     private function listRecords()
@@ -340,33 +389,12 @@ class ServiceProvider
             throw new BadArgumentException("bad argument: Missing required argument 'metadataPrefix'");
         }
 
-        $options = [
-            'limit' => $this->limit,
-            'set' => null,
-            'offset' => 0,
-            'from' => null,
-            'to' => null
-        ];
+        $options = $this->collectOptions();
 
-        if (array_key_exists('set', $this->options)) {
-            $options['set'] = $this->options['set'];
+        $records = $this->repository->listRecords($options);
+        if (count($records['records']) == 0) {
+            throw new NoRecordsMatch();
         }
-
-        if (array_key_exists('resumptionToken', $this->options)) {
-            $data = $this->decodeToken($this->options['resumptionToken']);
-            $options = $data;
-        }
-
-        $metadataPrefix = null;
-        if (array_key_exists("metadataPrefix", $this->options)) {
-            $metadataPrefix = $this->options['metadataPrefix'];
-        }
-
-        if (array_key_exists("metadataPrefix", $options)) {
-            $metadataPrefix = $options['metadataPrefix'];
-        }
-
-        $records = $this->repository->listRecords($metadataPrefix, $set, $options);
 
         $element = $response->addElement('ListRecords');
         foreach ($records['records'] as $record) {
@@ -406,7 +434,7 @@ class ServiceProvider
         if ( $cursor <= $records['total']) {
             $options['offset'] = $records['offset'] + $records['limit'];
             $resumptionToken = $this->encodeToken(
-                array_merge($options, ["metadataPrefix" => $metadataPrefix])
+                array_merge($options)
             );
             $response = $this->addResumptionToken($response, $resumptionToken, $cursor, $records['total']);
         }
@@ -422,6 +450,14 @@ class ServiceProvider
     private function decodeToken($data)
     {
         return json_decode(base64_decode($data), true);
+    }
+
+    /**
+     * @param null $baseUrl
+     */
+    public function setBaseUrl($baseUrl)
+    {
+        $this->baseUrl = $baseUrl;
     }
 
 }

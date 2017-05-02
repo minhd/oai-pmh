@@ -8,10 +8,10 @@ interface OAIRepository
     public function listSets($limit = 0, $offset = 0);
     public function listSetsByToken($token);
     public function getRecord($metadataFormat, $identifier);
-    public function listRecords($metadataFormat = null, $set = null, $options);
+    public function listRecords($options);
     public function listRecordsByToken($token);
     public function listMetadataFormats($identifier = null);
-    public function listIdentifiers($metadataPrefix = null, $options);
+    public function listIdentifiers($options);
 
     // helper
     public function getDateFormat();
